@@ -1,0 +1,23 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+# A new push replaces the unfinished build of the same branch.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  Linux:
+    uses: ./.github/workflows/linux.yml
+
+  Windows:
+    uses: ./.github/workflows/windows.yml
+    with:
+      image: "2022"
+      build-type: Release
+      package: true
