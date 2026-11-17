@@ -3,6 +3,7 @@
 
 Compares intact/cut LOD0 topology, then samples the authored flesh triangles.
 """
+import zlib
 import argparse
 import hashlib
 import json
@@ -15,7 +16,7 @@ import tempfile
 
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'scripts/animation'))
-from extract_vpk import entries,extract
+from dm_sources import archives, entries, extract
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from pins import pinned_commit  # noqa: E402
 PIN='6deac3176bf0e8dd2a50038cfa1066abfa58c1f9'
@@ -37,7 +38,7 @@ def main():
         for suffix in ('.mdl','.vvd','.dx90.vtx')}
     wanted.add('mm/materials/models/npc_necroguard/necroguard_full.vtf')
     index={}
-    for archive in sorted(args.vpk_root.glob('depot_21*_dir.vpk')):
+    for archive in archives(args.vpk_root):
         for name,entry in entries(archive):
             if name.lower() in wanted:index[name.lower()]=(archive,entry)
     if set(index)!=wanted:raise ValueError('Missing original cut-model inputs')
@@ -46,7 +47,7 @@ def main():
         work=Path(temporary);sources={}
         for name,(archive,entry) in index.items():
             data=extract(archive,entry);p=work/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(data)
-            sources[name]=dict(archive=archive.name,crc32=f'{entry[0]:08x}',sha256=hashlib.sha256(data).hexdigest())
+            sources[name]=dict(archive=archive.name,crc32=f'{zlib.crc32(data):08x}',sha256=hashlib.sha256(data).hexdigest())
         env=dict(os.environ,BRUTAL_SOURCEIO=str(args.sourceio.resolve()),
             BRUTAL_DM_MODEL_DIR=str(work/'mm/models/npc/necroguard'),
             BRUTAL_DM_ATLAS=str(work/'mm/materials/models/npc_necroguard/necroguard_full.vtf'),

@@ -29,7 +29,7 @@ import sys
 import numpy as np
 
 from retarget_kf import cross, norm, prime_quaternions
-from extract_vpk import entries, extract, store
+from dm_sources import archives, entries, extract, store
 from inspect_mdl import load_mdl
 from retarget_kf import quat_matrix, matrix_quat
 from retarget_contract import CONTRACT, sides as correspondence_sides, validate as validate_correspondence, measure_grip_solver, validate_attachment
@@ -277,7 +277,7 @@ class Viewmodel:
         if not dst.exists():
             dst.parent.mkdir(parents=True, exist_ok=True)
             wanted = 'mm/models/'+('' if '/' in model else 'npc/player/')+model+extension
-            for archive in sorted(self.vpk.glob('*_dir.vpk')):
+            for archive in reversed(archives(self.vpk)):
                 found = next((e for n, e in entries(archive) if n.lower() == wanted), None)
                 if found is not None: store(dst, extract(archive, found)); break
             else: raise FileNotFoundError(wanted)
@@ -590,7 +590,7 @@ class Viewmodel:
         # rotating by the view. This moves the eye, not the body/viewmodel mount.
         return matrix[:3, 3]*[-1., -1., 1.], angles
 
-    def segment(self, model, clip, duration=None, loop=False, roll_state=None, start_pose=None, return_to=None, body_camera=None, head_camera=None, runtime_entry=False, loop_lead_in=0.):
+    def segment(self, model, clip, duration=None, loop=False, roll_state=None, start_pose=None, return_to=None, body_camera=None, head_camera=None, runtime_entry=False, loop_lead_in=0., dm_frames=None):
         natural = self.duration(model, clip)
         fade = self.sequence_fade(model, clip)
         period = (duration or natural) if loop else None
@@ -619,9 +619,9 @@ class Viewmodel:
                         break
                     ancestor = self.parents[ancestor]
         if roll_state is None: roll_state = {}
-        for t in times:
+        for index, t in enumerate(times):
             source = ((t % period)*natural/period if loop_lead_in else t*natural/duration) if loop else min(t, natural)
-            dm = self.dm_world(model, clip, source)
+            dm = dm_frames[index] if dm_frames is not None else self.dm_world(model, clip, source)
             weapon_grip = clip != '@idle01'
             self.source_clip = (model, clip, source)
             # The item is a separate Source entity. Its flip clock remains real
@@ -663,11 +663,12 @@ class Viewmodel:
             times = np.concatenate([times, duration+tail])
         return times, poses, worst
 
-    def held_loop(self, model, clip, duration, start_pose, roll_state):
+    def held_loop(self, model, clip, duration, start_pose, roll_state, lead=None):
         """Play the entry fade once, then loop a full raw period at the settled phase."""
-        lead = self.sequence_fade(model, clip)
-        item_entry = getattr(self, 'loop_entry_time', lambda model, clip: 0.)(model, clip)
-        lead = max(lead, item_entry)
+        if lead is None:
+            lead = self.sequence_fade(model, clip)
+            item_entry = getattr(self, 'loop_entry_time', lambda model, clip: 0.)(model, clip)
+            lead = max(lead, item_entry)
         # The loop keys must land on emitted samples, after any one-off flip,
         # rather than interpolating across the last entry frame at every wrap.
         lead = float(np.ceil(lead*FPS-1e-5)/FPS)
@@ -682,7 +683,7 @@ class Viewmodel:
                 and (group in ('idle', 'idle1h', 'brutal_sprint', 'brutal_sprint1h')
                      or group.startswith(('walk', 'run', 'sneak'))))
         fade = self.sequence_fade(self.pending[0]['model'], self.pending[0]['clip']) if gait else 0.
-        entry_fades = []
+        entry_fades, extra_rules = [], []
         for (offset, _, _), src in zip(segments, self.pending):
             if src.get('runtime_fade_in', 0.) > 0:
                 labels = [label for time, label in textkeys if abs(time-offset) < 1e-6
@@ -692,12 +693,20 @@ class Viewmodel:
                 specific = [label for label in labels if label != 'start']
                 if not labels:
                     raise ValueError(f'Runtime entry has no matching start key: {group} at {offset}')
-                entry_fades.append((specific[0] if specific else labels[0], src['runtime_fade_in']))
+                entry_fades.append((
+                    specific[0] if specific else labels[0],
+                    src['runtime_fade_in'],
+                    src.get('runtime_easing', 'linear'),
+                    src.get('runtime_clock', 'animation'),
+                ))
+            extra_rules.extend(src.get('extra_rules', ()))
         self.groups.setdefault(out.name, {})[group] = dict(
             marks=sorted([[float(t), label] for t, label in textkeys]),
             segments=[dict(offset=float(offset), duration=float(t[-1]), **src) for (offset, t, _), src in zip(segments, self.pending)],
             runtime_arm_fades=([dict(key='*', duration=fade, clock='simulation')] if gait else
-                               [dict(key=key, duration=duration, clock='animation') for key, duration in entry_fades]))
+                               [dict(key=key, duration=duration, clock=clock,
+                                     **({'easing': easing} if easing != 'linear' else {}))
+                                for key, duration, easing, clock in entry_fades]))
         self.pending = []
         times = np.concatenate([offset+t for offset, t, _ in segments])
         poses = [p for _, _, ps in segments for p in ps]
@@ -727,10 +736,13 @@ class Viewmodel:
             self.write_gait_blend_rules(out, group, fade)
         elif entry_fades:
             rows = ['blending_rules:']
-            for key, entry_fade in entry_fades:
-                rows += ["  - from: '*'", f"    to: '{group}:{key}'", '    easing: linear',
-                         f'    duration: {entry_fade:.9g}', '    clock: animation',
+            for key, entry_fade, easing, clock in entry_fades:
+                rows += ["  - from: '*'", f"    to: '{group}:{key}'", f'    easing: {easing}',
+                         f'    duration: {entry_fade:.9g}', f'    clock: {clock}',
                          "  - from: ''", f"    to: '{group}:{key}'", '    easing: linear', '    duration: 0']
+            for from_pat, to_key, fade_dur, easing, clock in extra_rules:
+                rows += [f"  - from: '{from_pat}'", f"    to: '{group}:{to_key}'", f'    easing: {easing}',
+                         f'    duration: {fade_dur:.9g}', f'    clock: {clock}']
             (out/(group+'.yaml')).write_text('\n'.join(rows)+'\n')
 
     @staticmethod
@@ -974,21 +986,90 @@ class Viewmodel:
             offset += times[-1]+.05
         return offset, worst
 
+    def _smooth_shield_return(self, model, clip, times):
+        """Ease a truncated shield-arm hold-and-snap tail cleanly across its trailing frames.
+
+        In Source's anm_parry_sword_shield_B, the right arm returns smoothly by frame 7
+        while the left shield arm holds ~28.8 deg through frame 6 (0.200s), snaps straight
+        to guard at frame 7, and sits idle across frames 7..10. Reconstruct the left-arm
+        recovery from frame 6 to frame 10 so both impact timing and clip duration stay exact.
+        """
+        natural = self.duration(model, clip)
+        frames = [{name: mat.copy() for name, mat in self.dm_world(model, clip, min(float(t), natural)).items()}
+                  for t in times]
+        # Only rewrite trailing frames when the left hand is flat idle from frame 7 onward
+        # while still displaced at frame 6.
+        if len(frames) < 8:
+            return frames
+        end_rot, end_pos = frames[-1]['SK_L_Hand'][:3, :3], frames[-1]['SK_L_Hand'][:3, 3]
+        hold_rot = np.degrees(np.arccos(np.clip((np.trace(frames[6]['SK_L_Hand'][:3, :3].T @ end_rot) - 1.) * .5, -1., 1.)))
+        tail_rot = max(np.degrees(np.arccos(np.clip((np.trace(frames[k]['SK_L_Hand'][:3, :3].T @ end_rot) - 1.) * .5, -1., 1.)))
+                       for k in range(7, len(frames)))
+        if hold_rot < 20. or tail_rot > .1 or float(norm(frames[6]['SK_L_Hand'][:3, 3] - end_pos)) < 4.:
+            return frames
+        left_bones = [name for name in frames[0] if name.startswith('SK_L_') or name == 'Leftshield']
+        span = float(len(frames) - 1 - 6)
+        for k in range(7, len(frames) - 1):
+            u = (k - 6) / span
+            s = float(u * u * (3. - 2. * u))
+            for name in left_bones:
+                M0, M1 = frames[6][name], frames[-1][name]
+                q0, q1 = matrix_quat(M0[:3, :3]), matrix_quat(M1[:3, :3])
+                if float(np.dot(q0, q1)) < 0.:
+                    q1 = -q1
+                dot = float(np.clip(np.dot(q0, q1), -1., 1.))
+                if dot > .99999:
+                    q = (1. - s) * q0 + s * q1
+                    q /= norm(q)
+                else:
+                    th = float(np.arccos(dot))
+                    q = (np.sin((1. - s) * th) * q0 + np.sin(s * th) * q1) / np.sin(th)
+                M = np.eye(4)
+                M[:3, :3] = quat_matrix([q[1], q[2], q[3], q[0]])
+                M[:3, 3] = (1. - s) * M0[:3, 3] + s * M1[:3, 3]
+                frames[k][name] = M
+        return frames
+
     def block(self, out):
         model = 'first_animations_shield'
         roll_state = {}
         armed, held = self.stance_pose(), self.stance_pose(blocking=True)
-        t1, p1, e1 = self.segment(model, 'anm_parry_sword_shield_in', roll_state=roll_state, start_pose=armed[0], runtime_entry=True)
-        (t2, p2, e2), lead = self.held_loop(model, 'anm_parry_sword_shield_idle', 1., p1[-1], roll_state)
-        t3, p3, e3 = self.segment(model, 'anm_parry_sword_shield_out', roll_state=roll_state,
-            start_pose=p2[-1], return_to=armed)
+        in_duration = self.duration(model, 'anm_parry_sword_shield_in')
+        t1, p1, e1 = self.segment(model, 'anm_parry_sword_shield_in', duration=in_duration, roll_state=roll_state)
+        self.pending[-1].update(runtime_fade_in=self.sequence_fade(model, 'anm_parry_sword_shield_in'),
+                                runtime_easing='smoothstep', runtime_clock='simulation',
+                                extra_rules=[('brutal_blockhit*', 'start', 0., 'linear', 'simulation')])
+        # The authored shield raise already arrives at the guard pose, so enter the
+        # held loop directly without a static pre-loop hold.
+        (t2, p2, e2), lead = self.held_loop(model, 'anm_parry_sword_shield_idle', 1., p1[-1], roll_state, lead=0.)
+        # Source's shield_out clip is a static overlay placeholder; its sequence fade
+        # lowers the guard immediately back to the armed idle.
+        out_duration = self.duration(model, 'anm_parry_sword_shield_out')
+        lower_fade = self.sequence_fade(model, 'anm_parry_sword_shield_out') or out_duration
+        t3 = np.linspace(0, lower_fade, max(2, round(lower_fade*FPS)+1))
+        dm_out = self.dm_world(model, 'anm_parry_sword_shield_out', 0.)
+        # Lowering removes the static guard overlay. Blend once to the base idle
+        # at runtime, from the pose actually displayed when the button is released.
+        p3 = [armed[0] for _ in t3]
+        e3 = self.error(dm_out, p2[-1], weapon_grip=True)
+        self.pending.append(dict(
+            model=model, clip='anm_parry_sword_shield_out', natural=out_duration, loop=False,
+            fade_in=0., runtime_fade_in=lower_fade, runtime_easing='smoothstep', runtime_clock='simulation',
+            loop_period=None, loop_lead_in=0., body_camera=None, head_camera=None, return_fade=lower_fade))
         hold = t1[-1]+.001; lower = hold+t2[-1]+.001; end = lower+t3[-1]
         self.write(out, 'brutal_block', [(0, t1, p1), (hold, t2, p2), (lower, t3, p3)],
-                   [(0, 'start'), (hold+lead, 'loop start'), (hold+t2[-1], 'loop stop'), (lower, 'lower start'), (end, 'stop')])
+                   [(0, 'start'), (.0001, 'shield overlay'), (hold+lead, 'loop start'), (hold+t2[-1], 'loop stop'), (lower, 'lower start'), (end, 'stop')])
         err = max(e1, e2, e3)
         for i, v in enumerate('ABC', 1):
-            times, poses, error = self.segment(model, 'anm_parry_sword_shield_'+v,
-                start_pose=held[0], return_to=held, runtime_entry=True)
+            clip = 'anm_parry_sword_shield_'+v
+            natural = self.duration(model, clip)
+            times = np.linspace(0, natural, max(2, round(natural*FPS)+1))
+            dm_frames = self._smooth_shield_return(model, clip, times) if v == 'B' else None
+            times, poses, error = self.segment(model, clip, duration=natural, dm_frames=dm_frames)
+            # Source attaches parry_sword_shield_{A,B,C} with AddLayeredSequence(blendIn=0, weight=1);
+            # start/end already match held guard, while chained impacts crossfade cleanly.
+            self.pending[-1].update(runtime_fade_in=.04, runtime_easing='sineOut', runtime_clock='simulation',
+                                    extra_rules=[('brutal_block:start', 'start', 0., 'linear', 'simulation')])
             self.write(out, f'brutal_blockhit{i}', [(0, times, poses)], [(0, 'start'), (times[-1], 'stop')])
             err = max(err, error)
         # Shield bash from the raised guard (layer_parry_sword_shield_bash): it returns to
@@ -1015,6 +1096,7 @@ class Viewmodel:
         (t2, p2, e2), lead = self.held_loop(model, 'anm_parry_sword_idle', 1., p1[-1], roll_state)
         t3, p3, e3 = self.segment(model, 'anm_parry_sword_out', roll_state=roll_state,
             start_pose=p2[-1], return_to=armed)
+        self.pending[-1].update(runtime_fade_in=.08, runtime_easing='sineOut', runtime_clock='simulation')
         hold = t1[-1]+.001; lower = hold+t2[-1]+.001; end = lower+t3[-1]
         self.write(out, 'brutal_block', [(0, t1, p1), (hold, t2, p2), (lower, t3, p3)],
                    [(0, 'start'), (hold+lead, 'loop start'), (hold+t2[-1], 'loop stop'), (lower, 'lower start'), (end, 'stop')])

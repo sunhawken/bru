@@ -35,6 +35,8 @@ staminaEnabled: Dark Messiah stamina
 staminaEnabledDescription: "Dark Messiah stamina costs and recovery."
 kickEnabled: Kick
 kickEnabledDescription: "Kick using the assigned button."
+kickAlwaysRagdoll: Kick always triggers ragdoll
+kickAlwaysRagdollDescription: "Ordinary non-adrenaline kicks always knock NPCs and supported creatures into ragdoll with normal kick damage, stamina cost, and pushback."
 slideEnabled: Slide
 slideEnabledDescription: "Crouch while sprinting or running to slide."
 activeBlockEnabled: Manual blocking
@@ -69,8 +71,8 @@ sparkEffects: Impact sparks
 sparkEffectsDescription: "Sparks on metal and scenery impacts."
 bloodDecals: Blood marks
 bloodDecalsDescription: "Blood marks on bodies and surfaces."
-combatSounds: Dark Messiah combat sounds
-combatSoundsDescription: "Weapon, impact, kick and adrenaline sounds."
+combatSounds: Dark Messiah sounds
+combatSoundsDescription: "Weapon, impact, kick, adrenaline, footstep, jump and landing sounds from Dark Messiah. Off: Morrowind sounds."
 adrenalineHudEnabled: Adrenaline gauge
 adrenalineHudEnabledDescription: "A charge indicator beside the native status bars."
 adrenalineFxEnabled: Adrenaline screen effect

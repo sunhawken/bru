@@ -637,9 +637,14 @@ void Launcher::MainDialog::play()
             QMessageBox msgBox(this);
             msgBox.setWindowTitle(tr("Dark Messiah data"));
             msgBox.setIcon(QMessageBox::Question);
-            msgBox.setText(tr("<b>The Dark Messiah animations are not imported yet.</b><br><br>"
-                              "Import them now? It takes about a minute. Without them the game uses "
-                              "Morrowind's animations and the Dark Messiah combat is off."));
+            if (mDarkMessiahPage->olderDataPresent())
+                msgBox.setText(tr("<b>The Dark Messiah import is from an older version of Brutal Morrowind.</b><br><br>"
+                                  "This version needs a new import. Import now? It takes about a minute. Without "
+                                  "it the game uses Morrowind's animations and the Dark Messiah combat is off."));
+            else
+                msgBox.setText(tr("<b>The Dark Messiah animations are not imported yet.</b><br><br>"
+                                  "Import them now? It takes about a minute. Without them the game uses "
+                                  "Morrowind's animations and the Dark Messiah combat is off."));
             QPushButton* importButton = msgBox.addButton(tr("Import and play"), QMessageBox::AcceptRole);
             QPushButton* playButton = msgBox.addButton(tr("Play without"), QMessageBox::DestructiveRole);
             msgBox.addButton(QMessageBox::Cancel);

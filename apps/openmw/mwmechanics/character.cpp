@@ -19,6 +19,8 @@
 
 #include "character.hpp"
 
+#include "brutalfootsteps.hpp"
+
 #include "../mwphysics/creaturerig.hpp"
 #include "../mwmechanics/brutaloptions.hpp"
 #include "../mwphysics/playerkinetics.hpp"
@@ -1175,6 +1177,15 @@ namespace MWMechanics
                 {
                     pitch = Misc::StringUtils::toNumeric<float>(tokens[2], pitch);
                 }
+            }
+
+            if (soundgen == "left" || soundgen == "right")
+            {
+                // The player's Dark Messiah steps follow the leg cycle, not the arms' clip.
+                if (mPtr == getPlayer() && BrutalFootsteps::available())
+                    return;
+                if (BrutalFootsteps::play(mPtr, soundgen == "left", false, BrutalFootsteps::Gait::Walk))
+                    return;
             }
 
             const ESM::RefId sound = charClass.getSoundIdFromSndGen(mPtr, soundgen);
@@ -2766,6 +2777,8 @@ namespace MWMechanics
                 // Started a jump.
                 else if (mJumpState != JumpState_InAir && vec.z() > 0.f)
                 {
+                    if (isPlayer && !wasInJump)
+                        BrutalFootsteps::playJump(mPtr);
                     mInJump = true;
                     if (kineticPlayer || (vec.x() == 0 && vec.y() == 0))
                         vec.z() = jumpHeight;
@@ -2817,7 +2830,9 @@ namespace MWMechanics
                         }
                     }
 
-                    if (mPtr.getClass().isNpc())
+                    if (mPtr.getClass().isNpc()
+                        && !BrutalFootsteps::play(
+                            mPtr, true, true, static_cast<BrutalFootsteps::Gait>(isPlayer ? mBrutalStepGait : 0)))
                     {
                         std::string_view sound;
                         osg::Vec3f pos(mPtr.getRefData().getPosition().asVec3());
@@ -2914,6 +2929,9 @@ namespace MWMechanics
                 clearAnimQueue();
                 jumpstate = JumpState_None;
             }
+
+            if (isPlayer)
+                updateBrutalPlayerSteps(duration, movestate, !mInJump && onground && !inwater && !flying);
 
             updateAnimQueue();
             if (!mAnimQueue.empty())
@@ -3449,7 +3467,24 @@ namespace MWMechanics
         mBrutalFastIndex = 0;
         resetBrutalFastContinuation();
         setAttackingOrSpell(false);
-        if (mUpperBodyState != UpperBodyState::None)
+        // The disabled weapon animation may be an equip or unequip that has not reached its
+        // attach/detach key yet; that key will not come, so finish the change here.
+        if (mUpperBodyState == UpperBodyState::Equipping)
+        {
+            mAnimation->showWeapons(true);
+            if (mAnimation->useShieldAnimations())
+            {
+                mAnimation->disable("shield");
+                mAnimation->showCarriedLeft(updateCarriedLeftVisible(mWeaponType));
+            }
+        }
+        if (mUpperBodyState == UpperBodyState::Unequipping)
+        {
+            mAnimation->showWeapons(false);
+            mUpperBodyState = UpperBodyState::None;
+            mWeaponType = ESM::Weapon::None;
+        }
+        else if (mUpperBodyState != UpperBodyState::None)
             mUpperBodyState = UpperBodyState::WeaponEquipped;
         mResetIdleOnAttackEnd = false;
 
@@ -4245,6 +4280,66 @@ namespace MWMechanics
             knockDown);
     }
 
+    void CharacterController::updateBrutalPlayerSteps(float duration, CharacterState movestate, bool grounded)
+    {
+        // Dark Messiah's player legs (player_animations.mdl) play Walk, run, sprint and Crouch
+        // at their own rate, whatever the arms do, with footstep events 2124 (right) and 2123
+        // (left) at fixed points of each cycle.
+        using Gait = BrutalFootsteps::Gait;
+        Gait gait;
+        float cycle = 1.f;
+        switch (movestate)
+        {
+            case CharState_WalkForward:
+            case CharState_WalkBack:
+            case CharState_WalkLeft:
+            case CharState_WalkRight:
+                gait = Gait::Walk;
+                break;
+            case CharState_RunForward:
+                gait = mBrutalSprinting ? Gait::Sprint : Gait::Run;
+                cycle = 20.f / 24.f; // a_RunN and a_sprintN are 21 frames at 24 fps
+                break;
+            case CharState_RunBack:
+            case CharState_RunLeft:
+            case CharState_RunRight:
+                gait = Gait::Run;
+                break;
+            case CharState_SneakForward:
+            case CharState_SneakBack:
+            case CharState_SneakLeft:
+            case CharState_SneakRight:
+                gait = Gait::Stealth;
+                break;
+            default:
+                mBrutalStepPhase = 0.f;
+                return;
+        }
+        if (!grounded || duration <= 0.f)
+        {
+            mBrutalStepPhase = 0.f;
+            return;
+        }
+        mBrutalStepGait = static_cast<int>(gait);
+        const float right = gait == Gait::Walk ? .292f : .333f;
+        const float left = gait == Gait::Walk ? .792f : .75f;
+        float from = mBrutalStepPhase;
+        float to = from + duration / cycle;
+        while (true)
+        {
+            const float end = std::min(to, 1.f);
+            if (from < right && right <= end)
+                BrutalFootsteps::play(mPtr, false, false, gait);
+            if (from < left && left <= end)
+                BrutalFootsteps::play(mPtr, true, false, gait);
+            if (to < 1.f)
+                break;
+            from = 0.f;
+            to -= 1.f;
+        }
+        mBrutalStepPhase = to;
+    }
+
     void CharacterController::updateBrutalShieldBlock()
     {
         static const std::string group = "brutal_block";
@@ -4336,26 +4431,66 @@ namespace MWMechanics
             stats.mBrutalSlashRight = false;
         }
 
+        const bool matchGuardPhase
+            = !mAnimation->activeSourceHasTextKey("brutal_block: start", "brutal_block: dagger arm frame");
+        const bool shieldOverlay
+            = mAnimation->activeSourceHasTextKey("brutal_block: start", "brutal_block: shield overlay");
+        const auto computeGuardStartPoint = [&](bool toRaise) {
+            if (!matchGuardPhase)
+                return 0.f;
+            const float start = mAnimation->getTextKeyTime(group + ": start");
+            const float loopStart = mAnimation->getTextKeyTime(group + ": loop start");
+            const float cur = mAnimation->getCurrentTime(group);
+            if (start < 0.f || loopStart <= start)
+                return 0.f;
+            if (toRaise)
+            {
+                if (shieldOverlay)
+                {
+                    const float stop = mAnimation->getTextKeyTime(group + ": stop");
+                    return stop > start ? (loopStart - start) / (stop - start) : 0.f;
+                }
+                const float lowerStart = mAnimation->getTextKeyTime(group + ": lower start");
+                const float stop = mAnimation->getTextKeyTime(group + ": stop");
+                if (lowerStart < 0.f || stop <= lowerStart || cur < lowerStart)
+                    return 0.f;
+                const float lowerFrac = std::clamp((cur - lowerStart) / (stop - lowerStart), 0.f, 1.f);
+                const float targetTime = start + (1.f - lowerFrac) * (loopStart - start);
+                return std::clamp((targetTime - start) / (stop - start), 0.f, 1.f);
+            }
+            if (cur < start)
+                return 0.f;
+            const float raiseFrac = std::clamp((cur - start) / (loopStart - start), 0.f, 1.f);
+            return 1.f - raiseFrac;
+        };
         if (wanted && (mBrutalBlock == BrutalBlock::None || mBrutalBlock == BrutalBlock::Lowering)
             && mUpperBodyState == UpperBodyState::WeaponEquipped)
         {
             mBrutalGuardCharge = false;
+            const float startPoint = mBrutalBlock == BrutalBlock::Lowering ? computeGuardStartPoint(true) : 0.f;
+            MWRender::Animation::ScopedDeferActiveGroupReset deferReset(*mAnimation);
             mAnimation->disable(group);
             playBlendedAnimation(group, Priority_Block, MWRender::BlendMask_UpperBody, false, 1.f, "start", "stop",
-                0.f, std::numeric_limits<uint32_t>::max());
+                startPoint, std::numeric_limits<uint32_t>::max());
             mBrutalBlock = BrutalBlock::Raising;
         }
         else if (!wanted && (mBrutalBlock == BrutalBlock::Raising || mBrutalBlock == BrutalBlock::Holding))
         {
-            mAnimation->disable(group);
             if (able)
             {
+                const float startPoint = !shieldOverlay && mBrutalBlock == BrutalBlock::Raising
+                    ? computeGuardStartPoint(false) : 0.f;
+                MWRender::Animation::ScopedDeferActiveGroupReset deferReset(*mAnimation);
+                mAnimation->disable(group);
                 playBlendedAnimation(group, Priority_Block, MWRender::BlendMask_UpperBody, true, 1.f, "lower start",
-                    "stop", 0.f, 0);
+                    "stop", startPoint, 0);
                 mBrutalBlock = BrutalBlock::Lowering;
             }
             else
+            {
+                mAnimation->disable(group);
                 mBrutalBlock = BrutalBlock::None;
+            }
         }
 
         if (mBrutalBlock == BrutalBlock::Raising
@@ -4388,7 +4523,9 @@ namespace MWMechanics
         {
             const std::string impact = chooseRandomGroup("brutal_blockhit");
             {
-                mAnimation->disable(impact);
+                MWRender::Animation::ScopedDeferActiveGroupReset deferReset(*mAnimation);
+                for (int i = 1; i <= 3; ++i)
+                    mAnimation->disable("brutal_blockhit" + std::to_string(i));
                 playBlendedAnimation(impact, Priority_Knockdown, MWRender::BlendMask_UpperBody, true, 1.f, "start",
                     "stop", 0.f, 0);
             }

@@ -99,7 +99,7 @@ Launcher::DarkMessiahPage::DarkMessiahPage(
     gameLayout->addWidget(intro);
     auto* pathRow = new QHBoxLayout();
     mPathEdit = new QLineEdit(gameBox);
-    mPathEdit->setPlaceholderText(tr("Dark Messiah folder (the one that holds vpks)"));
+    mPathEdit->setPlaceholderText(tr("Dark Messiah folder (VPK, GCF or extracted mm resources)"));
     mBrowseButton = new QPushButton(tr("Browse..."), gameBox);
     mDetectButton = new QPushButton(tr("Detect"), gameBox);
     pathRow->addWidget(mPathEdit, 1);
@@ -204,8 +204,9 @@ bool Launcher::DarkMessiahPage::isGameFolder(const QString& folder)
 {
     if (folder.isEmpty())
         return false;
-    for (const QString& candidate : { folder, folder + "/vpks" })
-        if (!QDir(candidate).entryList({ QStringLiteral("*_dir.vpk") }, QDir::Files).isEmpty())
+    for (const QString& candidate : { folder, folder + "/vpks", folder + "/mm", folder + "/mm/vpks" })
+        if (!QDir(candidate).entryList({ QStringLiteral("*_dir.vpk"), QStringLiteral("*.gcf") }, QDir::Files).isEmpty()
+            || QFileInfo::exists(candidate + "/models/npc/player/first_basic.mdl"))
             return true;
     return false;
 }
@@ -248,6 +249,28 @@ bool Launcher::DarkMessiahPage::gameFolderValid() const
 bool Launcher::DarkMessiahPage::dataReady() const
 {
     return Misc::DarkMessiahData::isReady(userDataPath());
+}
+
+bool Launcher::DarkMessiahPage::olderDataPresent() const
+{
+    for (const std::filesystem::path& folder : Misc::DarkMessiahData::olderImports(userDataPath()))
+        if (Misc::DarkMessiahData::markerRecipe(folder) > 0)
+            return true;
+    return false;
+}
+
+void Launcher::DarkMessiahPage::removeOlderData()
+{
+    for (const std::filesystem::path& folder : Misc::DarkMessiahData::olderImports(userDataPath()))
+    {
+        std::error_code error;
+        std::filesystem::remove_all(folder, error);
+        if (error)
+            mLog->appendPlainText(tr("Could not remove the old import %1: %2")
+                                      .arg(Files::pathToQString(folder), QString::fromStdString(error.message())));
+        else
+            mLog->appendPlainText(tr("Removed the old import %1").arg(Files::pathToQString(folder)));
+    }
 }
 
 bool Launcher::DarkMessiahPage::importRunning() const
@@ -307,23 +330,15 @@ void Launcher::DarkMessiahPage::updateStatus()
     else if (isGameFolder(folder))
         mFolderStatus->setText(tr("Game files found."));
     else
-        mFolderStatus->setText(tr("This folder has no Dark Messiah archives (vpks/*_dir.vpk)."));
+        mFolderStatus->setText(tr("This folder has no Dark Messiah resources (VPK, GCF or extracted mm folder)."));
 
     const std::filesystem::path root = Misc::DarkMessiahData::root(userDataPath());
     if (dataReady())
         mDataStatus->setText(tr("Imported and ready: %1").arg(Files::pathToQString(root)));
     else
-    {
-        bool older = false;
-        std::error_code error;
-        const std::filesystem::path assets = userDataPath() / "dm-assets";
-        if (std::filesystem::is_directory(assets, error))
-            for (const auto& entry : std::filesystem::directory_iterator(assets, error))
-                if (Misc::DarkMessiahData::markerRecipe(entry.path()) > 0)
-                    older = true;
-        mDataStatus->setText(older ? tr("Imported for an older version of Brutal Morrowind. Import again.")
-                                   : tr("Not imported yet. The import takes about a minute."));
-    }
+        mDataStatus->setText(olderDataPresent()
+                ? tr("Imported for an older version of Brutal Morrowind. Import again.")
+                : tr("Not imported yet. The import takes about a minute."));
     if (!importRunning())
     {
         mImportButton->setText(dataReady() ? tr("Import again") : tr("Import"));
@@ -357,6 +372,7 @@ void Launcher::DarkMessiahPage::startImport(bool playAfter)
     saveSettings();
     mPlayAfter = playAfter;
     mCancelling = false;
+    ++mImportRun;
     mPendingLine.clear();
     mLog->clear();
     mLog->setVisible(true);
@@ -380,9 +396,9 @@ void Launcher::DarkMessiahPage::cancelImport()
     mLog->appendPlainText(tr("Cancel requested by the user."));
     // The importer stops its steps when its input closes; kill it if it does not.
     mProcess->closeWriteChannel();
-    QTimer::singleShot(15000, mProcess, [process = mProcess] {
-        if (process->state() != QProcess::NotRunning)
-            process->kill();
+    QTimer::singleShot(15000, this, [this, run = mImportRun] {
+        if (run == mImportRun && importRunning())
+            mProcess->kill();
     });
 }
 
@@ -415,7 +431,10 @@ void Launcher::DarkMessiahPage::processFinished(int exitCode, QProcess::ExitStat
     mProgress->setRange(0, 1);
     mProgress->setValue(success ? 1 : 0);
     if (success)
+    {
         mStepLabel->setText(tr("Import finished."));
+        removeOlderData();
+    }
     else if (mCancelling || exitCode == sCancelledExitCode)
         mStepLabel->setText(tr("Import cancelled."));
     else

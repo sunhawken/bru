@@ -11,7 +11,7 @@ import sys
 import numpy as np
 
 from retarget_kf import cross, norm
-from extract_vpk import entries, extract, store
+from dm_sources import archives, entries, extract, store
 from inspect_mdl import load_mdl
 from retarget_kf import quat_matrix, matrix_quat
 
@@ -62,7 +62,7 @@ class Importer:
             dst = self.work/(model+'.mdl')
             if not dst.exists():
                 wanted = 'mm/models/npc/player/'+model+'.mdl'
-                for archive in sorted(self.vpk.glob('*_dir.vpk')):
+                for archive in reversed(archives(self.vpk)):
                     found = next((e for n,e in entries(archive) if n.lower()==wanted),None)
                     if found is not None:
                         store(dst,extract(archive,found)); break

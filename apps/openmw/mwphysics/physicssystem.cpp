@@ -1029,7 +1029,8 @@ namespace MWPhysics
         const float units=2.f*half.z()/72.f;
         const int mask=CollisionType_World|CollisionType_HeightMap|CollisionType_Door;
         const osg::Vec3f chest=position+osg::Vec3f(0,0,half.z());
-        bool ledge=Settings::game().mBrutalRagdoll && (superKick || ((knockDown || actor->getOnGround() || continuing)
+        bool fullKnockdown = superKick || (knockDown && !slideTrip);
+        bool ledge=Settings::game().mBrutalRagdoll && (fullKnockdown || ((knockDown || actor->getOnGround() || continuing)
             && !world->isSwimming(ptr) && !world->isFlying(ptr)));
         if (isCreature && (!rig || (immobile && !superKick))) ledge=false;
         if (ledge && !knockDown && castSphere(chest,chest+direction*(60.f*units),half.x()*.8f,mask).mHit) ledge=false;
@@ -1097,7 +1098,7 @@ namespace MWPhysics
                 ? std::make_unique<Ragdoll>(ptr,*rig,bones,inherited,kick*weight,mTaskScheduler.get(),contact,profile)
                 : std::make_unique<Ragdoll>(ptr,bones,inherited,kick,mTaskScheduler.get(),contact,motion,
                     surfaceVertices,unsupportedBones,profile);
-            if (superKick) body->guardSuperKickSpawn();
+            if (fullKnockdown) body->guardSuperKickSpawn();
             mRagdollAnimation.erase(ptr.mRef);
             actor->clearExternalVelocity(); actor->setInertialForce({}); actor->setOnGround(false); actor->setRagdoll(true);
             mRagdolls.emplace(ptr.mRef,std::move(body));

@@ -156,6 +156,8 @@ namespace MWMechanics
         bool mAdjustMovementAnimSpeed{ false };
         bool mBrutalSprinting{ false }; // kinetic player sprints forward this frame
         bool mBrutalSprintAnim{ false }; // the current movement clip is the sprint
+        float mBrutalStepPhase{ 0.f }; // player footstep clock, a fraction of the leg cycle
+        int mBrutalStepGait{ 0 }; // BrutalFootsteps::Gait of the last player step
         bool mMovementAnimationHasMovement{ false };
 
         CharacterState mDeathState{ CharState_None };
@@ -389,6 +391,7 @@ namespace MWMechanics
 
         void cancelAttackForKick();
         void updateBrutalShieldBlock();
+        void updateBrutalPlayerSteps(float duration, CharacterState movestate, bool grounded);
         bool updateBrutalCombo();
         void updateBrutalSlide(float duration);
         void cancelBrutalSlide();

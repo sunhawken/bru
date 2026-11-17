@@ -4,6 +4,7 @@
 RGBA bytes and material metadata are kept as they are; neutral-grey
 multiplicative blending is implemented by the engine.
 """
+import zlib
 import argparse
 import hashlib
 import io
@@ -16,7 +17,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts/animation'))
-from extract_vpk import entries, extract
+from dm_sources import archives, entries, extract
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from pins import pinned_commit  # noqa: E402
 
@@ -40,7 +41,7 @@ def main():
     from vtf_decode import load_vtf_texture_frames
     from PIL import Image
     index = {}
-    for archive in sorted(args.vpk_root.glob('depot_21*_dir.vpk')):
+    for archive in archives(args.vpk_root):
         for name, entry in entries(archive):
             index[name.lower()] = archive, name, entry
     sources, outputs = {}, {}
@@ -48,7 +49,7 @@ def main():
     def read(name):
         archive, exact, entry = index[name.lower()]
         data = extract(archive, entry)
-        sources[exact] = dict(archive=archive.name, crc32=f'{entry[0]:08x}',
+        sources[exact] = dict(archive=archive.name, crc32=f'{zlib.crc32(data):08x}',
                              sha256=hashlib.sha256(data).hexdigest())
         return data
 

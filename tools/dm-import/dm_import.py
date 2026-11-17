@@ -3,8 +3,8 @@
 
     dm-import --dark-messiah <dir> --morrowind <dir> --output <dir>
 
-Reads the Dark Messiah VPK archives and the original Morrowind.bsa, runs every
-conversion step in order and writes six data directories below --output:
+Reads Dark Messiah VPK/GCF archives or extracted resources and the original Morrowind.bsa, runs every
+conversion step in order and writes eight data directories below --output:
 
     body-data  clinch-data  effects-data  firstperson-data  npc-data  slide-data
 
@@ -29,15 +29,17 @@ ANIMATION = ROOT / 'scripts/animation'
 CREATURES = ROOT / 'scripts/creatures'
 EFFECTS = ROOT / 'scripts/effects'
 CALIBRATION = HERE / 'calibration'
-RECIPE_VERSION = 2  # Misc::DarkMessiahData::sRecipe in the engine must match.
+RECIPE_VERSION = 4  # Misc::DarkMessiahData::sRecipe in the engine must match.
 # Conversion steps per import, for progress reporting.
-TOTAL_STEPS = 34
+TOTAL_STEPS = 36
 KEYFRAMES = ('.kf', '.yaml')
 # Steps run side by side, one core each; the matrices involved are 4x4.
 ENVIRONMENT = dict(os.environ, OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1', MKL_NUM_THREADS='1')
 
 sys.path.insert(0, str(HERE))
 from bsa import Bsa, BsaError  # noqa: E402
+sys.path.insert(0, str(ANIMATION))
+from dm_sources import source_root  # noqa: E402
 
 MORROWIND_MESHES = (
     'meshes/xbase_anim.nif', 'meshes/xbase_anim.kf',
@@ -55,14 +57,6 @@ class ImportError_(Exception):
 
 class Cancelled(Exception):
     pass
-
-
-def find_vpks(path):
-    """Accept the game folder or its vpks folder."""
-    for candidate in (path, path / 'vpks'):
-        if candidate.is_dir() and any(candidate.glob('*_dir.vpk')):
-            return candidate
-    raise ImportError_(f'No Dark Messiah archives (vpks/*_dir.vpk) found in {path}')
 
 
 def find_bsa(path):
@@ -178,7 +172,8 @@ class Importer:
         out = self.stage('effects')
         for label, script in (('Sounds and particle textures', 'import_dark_messiah_effects.py'),
                               ('Blood decals', 'import_dark_messiah_decals.py'),
-                              ('Cut surfaces', 'import_dark_messiah_caps.py')):
+                              ('Cut surfaces', 'import_dark_messiah_caps.py'),
+                              ('Footstep sounds', 'import_dark_messiah_footsteps.py')):
             self.run(label, EFFECTS / script, '--vpk-root', self.vpks, '--output', out)
 
     def body(self):
@@ -523,6 +518,7 @@ class Importer:
                 frames = pool.submit(lambda: (npc.result(), slide.result(), self.slide_and_clinch_frames()))
                 arms = self.finish(dagger, staff, sword, chain)
                 frames.result(); effects.result(); creatures.result(); kick.result()
+                self.run('Footstep keys', ANIMATION / 'add_footstep_keys.py', self.stage('npc'))
             except BaseException:
                 # One failed or cancelled step stops the others instead of waiting for them.
                 self.cancel()
@@ -556,10 +552,10 @@ def main():
     parser = argparse.ArgumentParser(prog='dm-import', description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--dark-messiah', type=Path, required=True,
-                        help='Dark Messiah of Might and Magic folder (the one holding vpks/)')
+                        help='Dark Messiah folder with VPK/GCF archives, or an extracted mm folder')
     parser.add_argument('--morrowind', type=Path, required=True,
                         help='Morrowind folder or its Data Files folder (the one holding Morrowind.bsa)')
-    parser.add_argument('--output', type=Path, required=True, help='Folder that receives the six data directories')
+    parser.add_argument('--output', type=Path, required=True, help='Folder that receives the eight data directories')
     parser.add_argument('--work', type=Path, help='Scratch folder (default: <output>/.dm-import-work)')
     parser.add_argument('--timings', action='store_true', help='Print when each step started and ended')
     parser.add_argument('--keep-work', action='store_true', help='Keep intermediate stages and logs after success')
@@ -575,7 +571,7 @@ def main():
     output = arguments.output.resolve()
     work = (arguments.work or output / '.dm-import-work').resolve()
     try:
-        vpks = find_vpks(arguments.dark_messiah.expanduser().resolve())
+        vpks = source_root(arguments.dark_messiah.expanduser().resolve())
         bsa = find_bsa(arguments.morrowind.expanduser().resolve())
         if work.exists():
             shutil.rmtree(work)
@@ -605,7 +601,7 @@ def main():
         if kept is not None:
             print(f'dm-import: step logs kept in {kept}', file=sys.stderr)
         return 3
-    except (ImportError_, BsaError) as error:
+    except (ImportError_, BsaError, ValueError, OSError) as error:
         print(f'dm-import: {error}', file=sys.stderr)
         return 1
     if arguments.timings:

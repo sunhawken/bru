@@ -16,7 +16,7 @@ local native={
     npcStagger='npcStagger',hitRecovery='hitRecovery',staminaEnabled='stamina',
     wallBounceEnabled='wallBounce',clinchEnabled='clinch',dismemberment='dismemberment',
     slideEnabled='slide',combatSounds='combatSounds',fastAttacksEnabled='fastAttacks',
-    bloodEffects='bloodEffects',sparkEffects='sparkEffects',
+    bloodEffects='bloodEffects',sparkEffects='sparkEffects',kickAlwaysRagdoll='kickAlwaysRagdoll',
 }
 local function apply()
     -- Storage callbacks are asynchronous; explicit apply must see this edit now.

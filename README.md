@@ -27,7 +27,9 @@ Download the package for your system from the Releases page.
 
 1. The launcher opens the installation wizard. Choose your Morrowind folder.
 2. Open the Dark Messiah page. The launcher finds a Steam installation of Dark Messiah by itself;
-   otherwise choose its folder.
+   otherwise choose its folder. Steam VPK archives, older GCF archives (including those
+   inside `mm/`) and an already extracted `mm/` folder are supported. VPK directory
+   archives may have any name ending in `_dir.vpk`; Steam depot names are not required.
 3. Press Play. The first time, the launcher imports Dark Messiah's animations, sounds and textures
    (about half a minute) and then starts the game.
 

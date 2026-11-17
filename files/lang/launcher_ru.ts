@@ -309,8 +309,8 @@ to default Morrowind fonts. Check this box if you still prefer original fonts ov
         <translation>Brutal Morrowind берёт боевые анимации, звуки и эффекты крови из вашей копии Dark Messiah of Might and Magic. Из папки игры ничего не копируется как есть: импортёр один раз собирает их в вашей папке пользовательских данных.</translation>
     </message>
     <message>
-        <source>Dark Messiah folder (the one that holds vpks)</source>
-        <translation>Папка Dark Messiah (в которой лежит vpks)</translation>
+        <source>Dark Messiah folder (VPK, GCF or extracted mm resources)</source>
+        <translation>Папка Dark Messiah (архивы VPK, GCF или распакованные ресурсы mm)</translation>
     </message>
     <message>
         <source>Browse...</source>
@@ -357,12 +357,20 @@ to default Morrowind fonts. Check this box if you still prefer original fonts ov
         <translation>Файлы игры найдены.</translation>
     </message>
     <message>
-        <source>This folder has no Dark Messiah archives (vpks/*_dir.vpk).</source>
-        <translation>В этой папке нет архивов Dark Messiah (vpks/*_dir.vpk).</translation>
+        <source>This folder has no Dark Messiah resources (VPK, GCF or extracted mm folder).</source>
+        <translation>В этой папке нет ресурсов Dark Messiah (VPK, GCF или распакованной папки mm).</translation>
     </message>
     <message>
         <source>Imported and ready: %1</source>
         <translation>Импортировано и готово: %1</translation>
+    </message>
+    <message>
+        <source>Could not remove the old import %1: %2</source>
+        <translation>Не удалось удалить старый импорт %1: %2</translation>
+    </message>
+    <message>
+        <source>Removed the old import %1</source>
+        <translation>Старый импорт удалён: %1</translation>
     </message>
     <message>
         <source>Imported for an older version of Brutal Morrowind. Import again.</source>
@@ -723,6 +731,10 @@ to default Morrowind fonts. Check this box if you still prefer original fonts ov
     <message>
         <source>Dark Messiah data</source>
         <translation>Данные Dark Messiah</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;The Dark Messiah import is from an older version of Brutal Morrowind.&lt;/b&gt;&lt;br&gt;&lt;br&gt;This version needs a new import. Import now? It takes about a minute. Without it the game uses Morrowind&apos;s animations and the Dark Messiah combat is off.</source>
+        <translation>&lt;b&gt;Импорт Dark Messiah сделан для более старой версии Brutal Morrowind.&lt;/b&gt;&lt;br&gt;&lt;br&gt;Для этой версии нужен новый импорт. Импортировать сейчас? Это займёт около минуты. Без него игра использует анимации Morrowind, а бой Dark Messiah выключен.</translation>
     </message>
     <message>
         <source>&lt;b&gt;The Dark Messiah animations are not imported yet.&lt;/b&gt;&lt;br&gt;&lt;br&gt;Import them now? It takes about a minute. Without them the game uses Morrowind&apos;s animations and the Dark Messiah combat is off.</source>

@@ -306,8 +306,11 @@ namespace MWMechanics
                 for (std::string_view family : { "iron", "steel", "silver", "ebony", "dwemer", "dwarven", "daedric",
                          "adamantium", "orcish" })
                     metal = metal || name.find(family) != std::string::npos;
-                sndMgr->playSound3D(blocker,
-                    ESM::RefId::stringRefId(metal ? "Brutal Shield Metal" : "Brutal Shield Wood"), 1.0f, 1.0f);
+                // Weapon blows against Dark Messiah's held player guard use Sword_on_Sword.
+                const char* id = activeBlock && !weapon.isEmpty() ? "Brutal Sword Contact"
+                    : metal                                       ? "Brutal Shield Metal"
+                                                                  : "Brutal Shield Wood";
+                sndMgr->playSound3D(blocker, ESM::RefId::stringRefId(id), 1.0f, 1.0f);
             }
             else
             {

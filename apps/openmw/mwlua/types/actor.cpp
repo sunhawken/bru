@@ -489,7 +489,7 @@ namespace MWLua
                 {"stamina", g.mBrutalStamina}, {"wallBounce", g.mBrutalWallBounce},
                 {"controlsEnabled", g.mBrutalControlsEnabled}, {"slide", g.mBrutalSlide}, {"clinch", g.mBrutalClinch}, {"fastAttacks", g.mBrutalFastAttacks},
                 {"combatSounds", g.mBrutalCombatSounds}, {"bloodEffects", g.mBrutalBloodEffects},
-                {"sparkEffects", g.mBrutalSparkEffects}
+                {"sparkEffects", g.mBrutalSparkEffects}, {"kickAlwaysRagdoll", g.mBrutalKickAlwaysRagdoll}
             };
         };
         actor["getBrutalOption"] = [initialiseOptions](std::string name) -> bool {
@@ -497,6 +497,7 @@ namespace MWLua
             if (!brutalOptions.contains(name)) throw std::runtime_error("Unknown Brutal option: " + name);
             if (name == "enabled") return brutalOptions.at(name);
             if (!brutalOptions.at("enabled")) return name == "classicFirstPerson" || name == "classicNpcAnimations";
+            if (name == "kickAlwaysRagdoll") return brutalOptions.at("ragdoll") && brutalOptions.at(name);
             return brutalOptions.at(name);
         };
         actor["setBrutalOption"] = [context, initialiseOptions](const SelfObject& self, std::string name, bool value) {
@@ -532,6 +533,7 @@ namespace MWLua
                 g.mMeleeContactAlwaysHits.set(on("guaranteedHits"));
                 g.mBrutalRagdoll.set(on("ragdoll"));
                 g.mRagdollEnhancement.set(on("ragdoll") && on("ragdollEnhancements"));
+                g.mBrutalKickAlwaysRagdoll.set(on("kickAlwaysRagdoll") && on("ragdoll"));
                 g.mDarkMessiahStandUp.set(on("npcStandup") && on("ragdoll") && !g.mBrutalClassicNpcAnimations);
                 g.mRagdollSoftStops.set(on("ragdollSoftStops"));
                 g.mRagdollNeutralPose.set(on("ragdollNeutralPose"));

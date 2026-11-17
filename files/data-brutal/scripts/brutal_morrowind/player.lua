@@ -145,7 +145,7 @@ local function strikeActor(target, direction, slide)
             velocity=direction*settings.get('superKickSpeed')
                 +util.vector3(0,0,settings.get('superKickSpeed')*C.superKickLift)})
     elseif not slide then
-        target:sendEvent('BrutalImpulse', {attacker = self, direction = direction})
+        target:sendEvent('BrutalImpulse', {attacker = self, direction = direction, kick = true})
     end
 end
 

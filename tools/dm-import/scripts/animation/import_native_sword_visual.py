@@ -260,6 +260,10 @@ def main():
                             if field == 'rotations' and value @ original[index, 1:] < 0:
                                 value *= -1
                             after[index, 1:] = value
+                        if field == 'rotations' and group.startswith('brutal_blockhit'):
+                            for index in range(1, len(after)):
+                                if after[index - 1, 1:] @ after[index, 1:] < 0:
+                                    after[index, 1:] *= -1
                     else:
                         preserved += len(original)
                     channel.keys = after

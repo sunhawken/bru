@@ -66,6 +66,7 @@ namespace Settings
         SettingValue<bool> mBrutalClassicFirstPerson{ mIndex, "Game", "brutal classic first person" };
         SettingValue<bool> mBrutalClassicNpcAnimations{ mIndex, "Game", "brutal classic npc animations" };
         SettingValue<bool> mBrutalDismemberment{ mIndex, "Game", "brutal dismemberment" };
+        SettingValue<bool> mBrutalKickAlwaysRagdoll{ mIndex, "Game", "brutal kick always ragdoll" };
         SettingValue<bool> mFirstPersonRigidViewmodel{ mIndex, "Game", "first person rigid viewmodel" };
         SettingValue<int> mDifficulty{ mIndex, "Game", "difficulty", makeClampSanitizerInt(-500, 500) };
         // We have to cap it since using high values (larger than 7168) will make some quests harder or impossible to

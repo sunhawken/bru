@@ -22,6 +22,7 @@ local function begin(data)
     -- The vertical part lifts the body only if the kick starts a ledge ragdoll.
     -- Creatures react with their own animations; the engine scales the push by their mass.
     core.sendGlobalEvent('BrutalNpcKick', {actor=self, attacker=data.attacker,
+        kick=data.kick==true, knockDown=data.knockDown==true,
         velocity=direction:normalize()*speed + util.vector3(0, 0, speed*C.ledgeKickLift)})
     reaction = {age = 0, attacker = data.attacker, cell = self.cell, speed = speed}
     nativePushes = nativePushes + 1

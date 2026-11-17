@@ -11,7 +11,7 @@ import sys
 
 ANIMATION = Path(__file__).resolve().parents[0] / 'scripts/animation'
 sys.path.insert(0, str(ANIMATION))
-from extract_vpk import entries, extract  # noqa: E402
+from dm_sources import archives, entries, extract  # noqa: E402
 
 MODEL = 'mm/models/npc/player/player_animations.mdl'
 
@@ -25,7 +25,7 @@ def main():
     args = parser.parse_args()
     args.work_dir.mkdir(parents=True, exist_ok=True)
     model = args.work_dir / 'player_animations.mdl'
-    for vpk in sorted(args.vpk_root.glob('*_dir.vpk')):
+    for vpk in reversed(archives(args.vpk_root)):
         found = next((entry for name, entry in entries(vpk) if name.lower() == MODEL), None)
         if found is not None:
             model.write_bytes(extract(vpk, found))

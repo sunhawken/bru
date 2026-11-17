@@ -1,7 +1,7 @@
 name: Release
 
-# For a version tag: builds both packages and publishes them as a GitHub
-# release, with CI/brutal/release-notes.md as its description.
+# For a version tag: builds both packages and creates a draft GitHub release
+# for review, with CI/brutal/release-notes.md as its description.
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
       build-type: Release
       package: true
 
-  Publish:
+  Draft:
     needs: [Linux, Windows]
     runs-on: ubuntu-24.04
     permissions:
@@ -38,7 +38,7 @@ jobs:
         name: brutalmorrowind-windows-2022-${{ github.sha }}
         path: dist
 
-    - name: Publish the release
+    - name: Create the draft release
       env:
         GH_TOKEN: ${{ github.token }}
       run: >
@@ -46,3 +46,5 @@ jobs:
         dist/*.tar.gz dist/*.exe
         --title "Brutal Morrowind ${GITHUB_REF_NAME#v}"
         --notes-file CI/brutal/release-notes.md
+        --draft
+        --verify-tag

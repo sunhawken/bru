@@ -8,6 +8,7 @@
 #include <iterator>
 #include <string>
 #include <string_view>
+#include <vector>
 
 // Data that brutalmorrowind-import builds from the user's own Dark Messiah and
 // Morrowind files. It lives in the user data directory, one folder per recipe,
@@ -15,7 +16,7 @@
 namespace Misc::DarkMessiahData
 {
     // Raise together with RECIPE_VERSION in tools/dm-import/dm_import.py.
-    inline constexpr int sRecipe = 2;
+    inline constexpr int sRecipe = 4;
 
     inline constexpr std::string_view sMarker = "dm-import-ready.json";
 
@@ -45,6 +46,24 @@ namespace Misc::DarkMessiahData
         int value = -1;
         const auto [end, error] = std::from_chars(text.data() + start, text.data() + text.size(), value);
         return error == std::errc() ? value : -1;
+    }
+
+    // Folders of imports for previous recipes, left by previous versions of the game. They are
+    // never used again; a newer recipe's folder is kept for the version that made it.
+    inline std::vector<std::filesystem::path> olderImports(const std::filesystem::path& userData)
+    {
+        std::vector<std::filesystem::path> result;
+        std::error_code error;
+        for (const auto& entry : std::filesystem::directory_iterator(userData / "dm-assets", error))
+        {
+            const std::string name = entry.path().filename().string();
+            int recipe = -1;
+            const auto [end, parsed] = std::from_chars(name.data(), name.data() + name.size(), recipe);
+            if (parsed == std::errc() && end == name.data() + name.size() && recipe > 0 && recipe < sRecipe
+                && entry.is_directory(error))
+                result.push_back(entry.path());
+        }
+        return result;
     }
 
     inline bool isReady(const std::filesystem::path& userData)

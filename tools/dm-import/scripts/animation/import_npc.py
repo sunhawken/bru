@@ -12,7 +12,7 @@ import numpy as np
 
 from retarget_kf import cross, norm
 
-from extract_vpk import entries, extract, store
+from dm_sources import archives, entries, extract, store
 from import_first_person import Importer, ROOT, FPS
 from inspect_mdl import load_mdl
 from retarget_kf import quat_matrix, matrix_quat
@@ -49,7 +49,7 @@ class GuardImporter(Importer):
         path = work/'npc_guard_combat_animations.mdl'
         if not path.exists():
             wanted = 'mm/models/npc/guard/npc_guard_combat_animations.mdl'
-            for archive in sorted(vpk.glob('*_dir.vpk')):
+            for archive in reversed(archives(vpk)):
                 entry = next((e for n,e in entries(archive) if n.lower()==wanted), None)
                 if entry is not None:
                     store(path,extract(archive,entry)); break
@@ -90,7 +90,9 @@ class GuardImporter(Importer):
         self.hand_map={'R':frame(attachment@[0,-1,0],attachment@[0,0,-1])@frame(native@[0,1,0],native@[1,0,0]).T}
         locals_={b.name:np.asarray(b.position) for b in attachment_bones}
         self.hand_map['L']=frame(locals_['SK_L_Finger_B1'],locals_['SK_L_Thumb_1'])@frame(self.nodes['Bip01 L Finger2'].translation,self.nodes['Bip01 L Finger0'].translation).T
-        self.shield_map=frame(self.shield_idle[:3,:3]@[0,0,1],self.shield_idle[:3,:3]@[0,-1,0])@frame(np.array([0,-1.,0]),np.array([0,0,1.])).T
+        # Morrowind shield meshes: face normal +Z, top edge +Y. The source
+        # shield's face normal is its item -Y and its top edge is item +Z.
+        self.shield_map=frame(self.shield_idle[:3,:3]@[0,-1,0],self.shield_idle[:3,:3]@[0,0,1])@frame(np.array([0,0,1.]),np.array([0,1.,0])).T
         self.arm_scale={};self.dm_hinge={};self.hinge={};self.roll_state={};self.segment_records=[];self.group_records={}
         idle=self.source_world(self.clip('guard','@combatidle'),0)
         for side,names in SIDES.items():
@@ -107,7 +109,7 @@ class GuardImporter(Importer):
     def resource(self,name):
         path=self.work/Path(name).name
         if not path.exists():
-            for archive in sorted(self.vpk.glob('*_dir.vpk')):
+            for archive in reversed(archives(self.vpk)):
                 found=next((e for n,e in entries(archive) if n.lower()==name.lower()),None)
                 if found is not None:store(path,extract(archive,found));break
             else:raise FileNotFoundError(name)

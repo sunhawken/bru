@@ -4,6 +4,7 @@
 VPK reads verify the archive's CRC32; PNG round trips verify every decoded RGBA
 byte, including transparent-edge colours.
 """
+import zlib
 import argparse
 import hashlib
 import io
@@ -17,7 +18,7 @@ import wave
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts/animation'))
-from extract_vpk import entries, extract
+from dm_sources import archives, entries, extract
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from pins import pinned_commit  # noqa: E402
 
@@ -112,14 +113,14 @@ def main():
     from PIL import Image
     import PIL
     index = {}
-    for archive in sorted(args.vpk_root.glob('*_dir.vpk')):
+    for archive in archives(args.vpk_root):
         for name, entry in entries(archive): index[name.lower()] = (archive, name, entry)
-    if not index: raise ValueError('No VPK entries found')
+    if not index: raise ValueError('No Dark Messiah resources found')
     sources = {}
     def read(name):
         archive, exact, entry = index[name.lower()]
         data = extract(archive, entry)
-        sources[exact] = {'archive':archive.name, 'crc32':f'{entry[0]:08x}', 'sha256':sha(data), 'bytes':len(data)}
+        sources[exact] = {'archive':archive.name, 'crc32':f'{zlib.crc32(data):08x}', 'sha256':sha(data), 'bytes':len(data)}
         return data
     outputs = {}
     def write(path, data):

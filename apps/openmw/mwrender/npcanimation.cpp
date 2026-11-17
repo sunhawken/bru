@@ -1622,18 +1622,38 @@ namespace MWRender
                     target.mBlendMask = source.mBlendMask;
                     reset = true;
                 }
-                // Body and arms use different rigs and clip lengths. Match the controller's
-                // current marker segment/loop phase, never advance a second gameplay clock.
-                const bool inLoop = source.mLoopStopTime > source.mLoopStartTime
-                    && source.mLoopStopTime <= source.mStopTime
-                    && source.getTime() >= source.mLoopStartTime && source.getTime() <= source.mLoopStopTime
-                    && target.mLoopStopTime > target.mLoopStartTime && target.mLoopStopTime <= target.mStopTime;
-                const float fraction = inLoop
-                    ? (source.getTime() - source.mLoopStartTime) / (source.mLoopStopTime - source.mLoopStartTime)
-                    : source.getCompletion();
-                const float start = inLoop ? target.mLoopStartTime : target.mStartTime;
-                const float stop = inLoop ? target.mLoopStopTime : target.mStopTime;
-                target.setTime(start + std::clamp(fraction, 0.f, 1.f) * (stop - start));
+                // Body and arms use different rigs and clip lengths. Map each marker segment of the
+                // controller (lead-in, loop, lead-out) onto the same segment of the body clip. Loop
+                // markers come from the clips' text keys: the body never plays, so it never reaches
+                // its own loop stop at run time.
+                const auto [sourceLoopStart, sourceLoopStop] = getLoopRange(source);
+                const auto [targetLoopStart, targetLoopStop] = body.getLoopRange(target);
+                const auto mapSegment = [](float time, float from0, float from1, float to0, float to1) {
+                    return from1 > from0 ? to0 + std::clamp((time - from0) / (from1 - from0), 0.f, 1.f) * (to1 - to0)
+                                         : to1;
+                };
+                const float time = source.getTime();
+                if (time < sourceLoopStart)
+                    target.setTime(mapSegment(time, source.mStartTime, sourceLoopStart, target.mStartTime, targetLoopStart));
+                else if (time <= sourceLoopStop)
+                {
+                    // A controller loop of another length (stock arms over imported legs) must not
+                    // stretch the body cycle: the body loop then keeps its own authored rate.
+                    const float targetLoopLength = targetLoopStop - targetLoopStart;
+                    const float current = target.getTime();
+                    if (targetLoopLength > 0.f && std::abs((sourceLoopStop - sourceLoopStart) - targetLoopLength) > 0.001f
+                        && current >= targetLoopStart && current <= targetLoopStop)
+                    {
+                        float next = current + std::max(duration, 0.f);
+                        if (next > targetLoopStop)
+                            next = targetLoopStart + std::fmod(next - targetLoopStart, targetLoopLength);
+                        target.setTime(next);
+                    }
+                    else
+                        target.setTime(mapSegment(time, sourceLoopStart, sourceLoopStop, targetLoopStart, targetLoopStop));
+                }
+                else
+                    target.setTime(mapSegment(time, sourceLoopStop, source.mStopTime, targetLoopStop, target.mStopTime));
                 target.mSpeedMult = 0.f;
                 target.mLoopCount = 0;
                 target.mPlaying = false;

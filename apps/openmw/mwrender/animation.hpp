@@ -183,6 +183,10 @@ namespace MWRender
         };
 
         typedef std::map<std::string, AnimState, std::less<>> AnimStateMap;
+
+        /// Loop markers of a state's group in its own source, within the state's start..stop range.
+        /// Falls back to start..stop when the group has no loop markers.
+        std::pair<float, float> getLoopRange(const AnimState& state) const;
         AnimStateMap mStates;
 
         typedef std::vector<std::shared_ptr<AnimSource>> AnimSourceList;
@@ -452,6 +456,31 @@ namespace MWRender
          * \param groupname Animation group to disable.
          */
         void disable(std::string_view groupname);
+
+        /// Defer resetActiveGroups() across remove/play sequences so blend history is not
+        /// overwritten by an underlying idle pose between disabling and re-playing a group.
+        class ScopedDeferActiveGroupReset
+        {
+        public:
+            explicit ScopedDeferActiveGroupReset(Animation& anim)
+                : mAnim(anim)
+                , mPrev(anim.mDeferActiveGroupReset)
+            {
+                mAnim.mDeferActiveGroupReset = true;
+            }
+            ~ScopedDeferActiveGroupReset()
+            {
+                mAnim.mDeferActiveGroupReset = mPrev;
+                if (!mPrev && mAnim.mDeferredActiveGroupReset)
+                    mAnim.resetActiveGroups();
+            }
+            ScopedDeferActiveGroupReset(const ScopedDeferActiveGroupReset&) = delete;
+            ScopedDeferActiveGroupReset& operator=(const ScopedDeferActiveGroupReset&) = delete;
+
+        private:
+            Animation& mAnim;
+            bool mPrev;
+        };
 
         /** Retrieves the velocity (in units per second) that the animation will move. */
         float getVelocity(std::string_view groupname) const;

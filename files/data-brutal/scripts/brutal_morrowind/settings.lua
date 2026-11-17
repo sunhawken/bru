@@ -27,6 +27,7 @@ local DEFAULTS={
     movementEnabled=true,
     staminaEnabled=true,
     kickEnabled=true,
+    kickAlwaysRagdoll=false,
     slideEnabled=true,
     activeBlockEnabled=true,
     shieldBashEnabled=true,
@@ -59,7 +60,7 @@ local DEFAULTS={
 -- Without the imported data they are off and both animation sets are Morrowind's;
 -- the stored preferences stay as they are and apply again once the data exists.
 local DARK_MESSIAH_KEYS={'firstPersonBody','dualWieldEnabled','meleeGeometry','dismemberment',
-    'npcStandupEnabled','kickEnabled','superKickEnabled','slideEnabled','slideFxEnabled','activeBlockEnabled',
+    'npcStandupEnabled','kickEnabled','kickAlwaysRagdoll','superKickEnabled','slideEnabled','slideFxEnabled','activeBlockEnabled',
     'shieldBashEnabled','parryEnabled','clinchEnabled','clinchFxEnabled','attackCombosEnabled',
     'fastAttacksEnabled','wallBounceEnabled','adrenalineEnabled','finisherEnabled','bloodEffects',
     'sparkEffects','bloodDecals','combatSounds'}
@@ -105,7 +106,7 @@ local function refresh()
     if values.allowThirdPerson then
         mode.firstPersonAnimations='morrowind'
         for _,key in ipairs({'firstPersonBody','dualWieldEnabled',
-            'meleeGeometry','dismemberment','kickEnabled','superKickEnabled',
+            'meleeGeometry','dismemberment','kickEnabled','kickAlwaysRagdoll','superKickEnabled',
             'slideEnabled','slideFxEnabled','shieldBashEnabled','clinchEnabled',
             'clinchFxEnabled','attackCombosEnabled','fastAttacksEnabled','wallBounceEnabled'}) do
             mode[key]=false
@@ -123,6 +124,7 @@ local function refresh()
         effective[key]=value
     end
     if not effective.ragdollEnabled then effective.dismemberment=false end
+    if not effective.ragdollEnabled or not effective.kickEnabled then effective.kickAlwaysRagdoll=false end
     rawValues,modeValues,effectiveValues=values,mode,effective
     return true
 end

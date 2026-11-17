@@ -1170,6 +1170,27 @@ namespace MWRender
         return mKeyframes->mTextKeys;
     }
 
+    std::pair<float, float> Animation::getLoopRange(const AnimState& state) const
+    {
+        float loopStart = state.mStartTime;
+        float loopStop = state.mStopTime;
+        if (state.mSource)
+        {
+            for (const auto& [time, text] : state.mSource->getTextKeys())
+            {
+                if (time < state.mStartTime || time > state.mStopTime)
+                    continue;
+                if (equalsParts(text, state.mGroupname, ": loop start"))
+                    loopStart = time;
+                else if (equalsParts(text, state.mGroupname, ": loop stop"))
+                    loopStop = time;
+            }
+        }
+        if (loopStop < loopStart)
+            return { state.mStartTime, state.mStopTime };
+        return { loopStart, loopStop };
+    }
+
     void Animation::loadAdditionalAnimations(VFS::Path::NormalizedView model, const std::string& baseModel)
     {
         constexpr VFS::Path::NormalizedView meshes("meshes/");

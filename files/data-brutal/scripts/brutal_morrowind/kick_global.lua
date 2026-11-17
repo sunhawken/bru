@@ -32,6 +32,8 @@ BrutalNpcKick=function(e)
     end
     if not e.actor or not e.actor:isValid() or not e.attacker or not e.attacker:isValid()
         or not types.Actor.objectIsInstance(e.actor) or types.Actor.isDead(e.actor) then return end
-    if available then world.applyNpcKick(e.actor,e.velocity,e.attacker,e.knockDown==true,e.slideTrip==true)
+    if e.kick and not settings.get('kickEnabled') then return end
+    local knockDown = e.knockDown == true or (e.kick == true and settings.get('kickAlwaysRagdoll'))
+    if available then world.applyNpcKick(e.actor,e.velocity,e.attacker,knockDown,e.slideTrip==true)
     else e.actor:sendEvent('BrutalLegacyNpcKick',{velocity=e.velocity}) end
 end}}

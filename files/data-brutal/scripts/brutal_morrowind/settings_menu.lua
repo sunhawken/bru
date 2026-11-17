@@ -36,7 +36,7 @@ local options={setting('enabled','checkbox'),setting('allowThirdPerson','checkbo
 for _,key in ipairs({
     'firstPersonBody','firstPersonAnimations','dualWieldEnabled','npcAnimations','guaranteedHits','meleeGeometry','equipmentPhysics',
     'ragdollEnabled','ragdollEnhancements','npcStandupEnabled','ragdollSoftStops','ragdollNeutralPose','ragdollLimbResponse','ragdollSelfCollision','dynamicProps','movementEnabled','staminaEnabled',
-    'kickEnabled','slideEnabled','activeBlockEnabled','shieldBashEnabled','parryEnabled',
+    'kickEnabled','kickAlwaysRagdoll','slideEnabled','activeBlockEnabled','shieldBashEnabled','parryEnabled',
     'clinchEnabled','attackCombosEnabled','fastAttacksEnabled','wallBounceEnabled','npcAiTweaks','npcStagger','hitRecovery',
     'adrenalineEnabled','finisherEnabled','superKickEnabled','slowMotionEnabled','dismemberment','bloodEffects','sparkEffects',
     'bloodDecals','combatSounds','adrenalineHudEnabled','adrenalineFxEnabled','slideFxEnabled','clinchFxEnabled',

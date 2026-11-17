@@ -21,6 +21,11 @@ namespace MWRender
                 return x;
             }
 
+            float smoothstep(float x)
+            {
+                return x * x * (3.f - 2.f * x);
+            }
+
             float sineOut(float x)
             {
                 return std::sin((x * osg::PIf) / 2.f);
@@ -114,6 +119,7 @@ namespace MWRender
 
             const std::unordered_map<std::string, EasingFn> easingsMap = {
                 { "linear", Easings::linear },
+                { "smoothstep", Easings::smoothstep },
                 { "sineOut", Easings::sineOut },
                 { "sineIn", Easings::sineIn },
                 { "sineInOut", Easings::sineInOut },
